@@ -11,6 +11,8 @@ import { Config } from "../config";
 import { WhereFilter } from "weaviate-ts-client";
 import { getWeaviateClient } from "../weaviate";
 import { builtInPropertiesKeys } from "./schema";
+import { e } from "mathjs";
+import exp from "constants";
 
 export async function executeQuery(
   query: QueryRequest,
@@ -136,27 +138,36 @@ async function executeSingleQuery(
     getter.withOffset(query.offset);
   }
 
-  if (
-    query.where?.type === "binary_op" &&
-    query.where.operator === "near_text" &&
-    query.where.value.type === "scalar"
-  ) {
-    getter.withNearText({
-      concepts: query.where.value.value,
-    });
-  } else if (forEachWhere) {
+  if (query.where) {
+    const nearTextFilter = getNearTextFitler(query.where);
+
+    if (nearTextFilter.length > 0) {
+      getter.withNearText({
+        concepts: nearTextFilter,
+      });
+    }
+  }
+
+  if (forEachWhere) {
     if (query.where) {
       const where = queryWhereOperator(query.where);
 
-      getter.withWhere({
-        operator: "And",
-        operands: [where, forEachWhere],
-      });
+      if (where !== null) {
+        getter.withWhere({
+          operator: "And",
+          operands: [where, forEachWhere],
+        });
+      } else {
+        getter.withWhere(forEachWhere);
+      }
     } else {
       getter.withWhere(forEachWhere);
     }
   } else if (query.where) {
-    getter.withWhere(queryWhereOperator(query.where));
+    const where = queryWhereOperator(query.where);
+    if (where !== null) {
+      getter.withWhere(where);
+    }
   }
 
   const response = await getter.do();
@@ -202,26 +213,81 @@ async function executeSingleQuery(
   return { rows };
 }
 
+function getNearTextFitler(
+  expression: Expression,
+  negated = false,
+  ored = false
+): string[] {
+  switch (expression.type) {
+    case "not":
+      return getNearTextFitler(expression.expression, !negated, ored);
+    case "and":
+      return expression.expressions
+        .map((expression) => getNearTextFitler(expression, negated, ored))
+        .flat()
+        .filter((filter) => filter !== null);
+    case "or":
+      return expression.expressions
+        .map((expression) => getNearTextFitler(expression, negated, true))
+        .flat()
+        .filter((filter) => filter !== null);
+    case "binary_op":
+      switch (expression.operator) {
+        case "near_text":
+          if (negated) {
+            throw new Error("Negated near_text not supported");
+          }
+          if (ored) {
+            throw new Error("Ored near_text not supported");
+          }
+          switch (expression.value.type) {
+            case "scalar":
+              return [expression.value.value];
+            case "column":
+              throw new Error("Column comparison not implemented");
+          }
+        default:
+          return [];
+      }
+    default:
+      return [];
+  }
+}
+
 export function queryWhereOperator(
   expression: Expression,
   path: string[] = [],
   negated = false
-): WhereFilter {
+): WhereFilter | null {
   switch (expression.type) {
     case "not":
       return queryWhereOperator(expression.expression, path, !negated);
     case "and":
       return {
         operator: "And",
-        operands: expression.expressions.map((expression) =>
-          queryWhereOperator(expression, path, negated)
+        operands: expression.expressions.reduce<WhereFilter[]>(
+          (exprs: WhereFilter[], expression: Expression): WhereFilter[] => {
+            const expr = queryWhereOperator(expression, path, negated);
+            if (expr !== null) {
+              exprs.push(expr);
+            }
+            return exprs;
+          },
+          []
         ),
       };
     case "or":
       return {
         operator: "Or",
-        operands: expression.expressions.map((expression) =>
-          queryWhereOperator(expression, path, negated)
+        operands: expression.expressions.reduce<WhereFilter[]>(
+          (exprs: WhereFilter[], expression: Expression): WhereFilter[] => {
+            const expr = queryWhereOperator(expression, path, negated);
+            if (expr !== null) {
+              exprs.push(expr);
+            }
+            return exprs;
+          },
+          []
         ),
       };
     case "binary_op":
@@ -257,9 +323,8 @@ export function queryWhereOperator(
             ...expressionValue(expression.value),
           };
         case "near_text":
-          throw new Error(
-            `near_text operator not supported with other operators.`
-          );
+          // silently ignore near_text operator
+          return null;
         default:
           throw new Error(
             `Unsupported binary comparison operator: ${expression.operator}`

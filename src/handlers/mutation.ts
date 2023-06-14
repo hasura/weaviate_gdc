@@ -62,7 +62,10 @@ export async function executeMutation(
           .withClassName(operation.table[0])
           .withOutput("verbose");
         if (operation.where) {
-          deleter.withWhere(queryWhereOperator(operation.where));
+          const where = queryWhereOperator(operation.where);
+          if (where) {
+            deleter.withWhere(where);
+          }
         }
 
         const deleteResponse = await deleter.do();
