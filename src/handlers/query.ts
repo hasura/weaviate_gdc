@@ -5,6 +5,7 @@ import {
   Query,
   QueryRequest,
   QueryResponse,
+  ScalarType,
   ScalarValue,
 } from "@hasura/dc-api-types";
 import { Config } from "../config";
@@ -256,18 +257,24 @@ function getNearTextFitler(
 
 export function queryWhereOperator(
   expression: Expression,
-  path: string[] = [],
-  negated = false
+  path: string[] = []
 ): WhereFilter | null {
   switch (expression.type) {
     case "not":
-      return queryWhereOperator(expression.expression, path, !negated);
+      const expr = queryWhereOperator(expression.expression, path);
+      if (expr === null) {
+        return null;
+      }
+      return {
+        operator: "Not",
+        operands: [expr],
+      };
     case "and":
       return {
         operator: "And",
         operands: expression.expressions.reduce<WhereFilter[]>(
           (exprs: WhereFilter[], expression: Expression): WhereFilter[] => {
-            const expr = queryWhereOperator(expression, path, negated);
+            const expr = queryWhereOperator(expression, path);
             if (expr !== null) {
               exprs.push(expr);
             }
@@ -281,7 +288,7 @@ export function queryWhereOperator(
         operator: "Or",
         operands: expression.expressions.reduce<WhereFilter[]>(
           (exprs: WhereFilter[], expression: Expression): WhereFilter[] => {
-            const expr = queryWhereOperator(expression, path, negated);
+            const expr = queryWhereOperator(expression, path);
             if (expr !== null) {
               exprs.push(expr);
             }
@@ -294,31 +301,31 @@ export function queryWhereOperator(
       switch (expression.operator) {
         case "equal":
           return {
-            operator: negated ? "NotEqual" : "Equal",
+            operator: "Equal",
             path: [...path, expression.column.name],
             ...expressionValue(expression.value),
           };
         case "less_than":
           return {
-            operator: negated ? "GreaterThanEqual" : "LessThan",
+            operator: "LessThan",
             path: [...path, expression.column.name],
             ...expressionValue(expression.value),
           };
         case "less_than_or_equal":
           return {
-            operator: negated ? "GreaterThan" : "LessThanEqual",
+            operator: "LessThanEqual",
             path: [...path, expression.column.name],
             ...expressionValue(expression.value),
           };
         case "greater_than":
           return {
-            operator: negated ? "LessThanEqual" : "GreaterThan",
+            operator: "GreaterThan",
             path: [...path, expression.column.name],
             ...expressionValue(expression.value),
           };
         case "greater_than_or_equal":
           return {
-            operator: negated ? "LessThan" : "GreaterThanEqual",
+            operator: "GreaterThanEqual",
             path: [...path, expression.column.name],
             ...expressionValue(expression.value),
           };
@@ -350,7 +357,7 @@ export function queryWhereOperator(
             operands: expression.values.map((value) => ({
               operator: "Equal",
               path: [...path, expression.column.name],
-              ...expressionValue(value),
+              [expressionValueType(expression.value_type)]: value,
             })),
           };
         default:
@@ -360,6 +367,31 @@ export function queryWhereOperator(
       }
     default:
       throw new Error(`Unsupported expression type: ${expression.type}`);
+  }
+}
+
+function expressionValueType(value_type: ScalarType): string {
+  switch (value_type) {
+    case "text":
+      return "valueText";
+    case "int":
+      return "valueInt";
+    case "boolean":
+      return "valueBoolean";
+    case "number":
+      return "valueNumber";
+    case "date":
+      return "valueDate";
+    case "uuid":
+      return "valueText";
+    case "geoCoordinates":
+      return "valueText";
+    case "phoneNumber":
+      return "valueText";
+    case "blob":
+      return "valueText";
+    default:
+      throw new Error(`Unknown scalar type: ${value_type}`);
   }
 }
 
