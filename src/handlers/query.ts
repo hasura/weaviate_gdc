@@ -270,6 +270,7 @@ export function queryWhereOperator(
         operands: [expr],
       };
     case "and":
+      if (expression.expressions.length < 1) return null;
       return {
         operator: "And",
         operands: expression.expressions.reduce<WhereFilter[]>(
@@ -284,6 +285,7 @@ export function queryWhereOperator(
         ),
       };
     case "or":
+      if (expression.expressions.length < 1) return null;
       return {
         operator: "Or",
         operands: expression.expressions.reduce<WhereFilter[]>(
@@ -352,6 +354,7 @@ export function queryWhereOperator(
     case "binary_arr_op":
       switch (expression.operator) {
         case "in":
+          if (expression.values.length < 1) return null;
           return {
             operator: "Or",
             operands: expression.values.map((value) => ({
