@@ -63,7 +63,10 @@ export async function executeMutation(
           .withOutput("verbose");
         if (operation.where) {
           const where = queryWhereOperator(operation.where);
-          if (where) {
+          if (where === false) {
+            return response;
+          }
+          if (where !== null && where !== true) {
             deleter.withWhere(where);
           }
         }

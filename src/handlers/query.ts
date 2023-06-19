@@ -88,7 +88,7 @@ async function executeQueryById(
               return [
                 alias,
                 response.properties![
-                  field.column as keyof typeof response.properties
+                field.column as keyof typeof response.properties
                 ],
               ];
             }
@@ -102,7 +102,7 @@ async function executeQueryById(
               return [
                 alias,
                 response.properties![
-                  field.field.column as keyof typeof response.properties
+                field.field.column as keyof typeof response.properties
                 ],
               ];
             }
@@ -114,8 +114,10 @@ async function executeQueryById(
   };
 }
 
+type ResolvedWhereFilter = WhereFilter | null | true | false;
+
 async function executeSingleQuery(
-  forEachWhere: WhereFilter | null,
+  forEachWhere: ResolvedWhereFilter,
   table: string,
   query: Query,
   config: Config
@@ -149,11 +151,18 @@ async function executeSingleQuery(
     }
   }
 
-  if (forEachWhere) {
+  if (forEachWhere === false) {
+    return { rows: [] };
+  }
+
+  if (forEachWhere !== null && forEachWhere !== true) {
     if (query.where) {
       const where = queryWhereOperator(query.where);
 
-      if (where !== null) {
+      if (where === false) {
+        return { rows: [] };
+      }
+      if (where !== null && where !== true) {
         getter.withWhere({
           operator: "And",
           operands: [where, forEachWhere],
@@ -166,7 +175,10 @@ async function executeSingleQuery(
     }
   } else if (query.where) {
     const where = queryWhereOperator(query.where);
-    if (where !== null) {
+    if (where === false) {
+      return { rows: [] };
+    }
+    if (where !== null && where !== true) {
       getter.withWhere(where);
     }
   }
@@ -191,7 +203,7 @@ async function executeSingleQuery(
         ) {
           const value =
             row[alias as keyof typeof row][
-              field.field.column as keyof typeof row
+            field.field.column as keyof typeof row
             ];
           return [alias, value];
         }
@@ -201,7 +213,7 @@ async function executeSingleQuery(
         ) {
           const value =
             row[alias as keyof typeof row][
-              field.relationship as keyof typeof row
+            field.relationship as keyof typeof row
             ];
           return [alias, value];
         }
@@ -258,44 +270,52 @@ function getNearTextFitler(
 export function queryWhereOperator(
   expression: Expression,
   path: string[] = []
-): WhereFilter | null {
+): ResolvedWhereFilter {
   switch (expression.type) {
     case "not":
       const expr = queryWhereOperator(expression.expression, path);
       if (expr === null) {
         return null;
       }
+      if (expr === true) {
+        return false;
+      }
+      if (expr === false) {
+        return true;
+      }
       return {
         operator: "Not",
         operands: [expr],
       };
     case "and":
+      let and_operands = [];
+      for (expression of expression.expressions) {
+        const expr = queryWhereOperator(expression, path);
+        if (expr === false) {
+          return false;
+        }
+        if (expr !== null && expr !== true) {
+          and_operands.push(expr);
+        }
+      }
       return {
         operator: "And",
-        operands: expression.expressions.reduce<WhereFilter[]>(
-          (exprs: WhereFilter[], expression: Expression): WhereFilter[] => {
-            const expr = queryWhereOperator(expression, path);
-            if (expr !== null) {
-              exprs.push(expr);
-            }
-            return exprs;
-          },
-          []
-        ),
+        operands: and_operands,
       };
     case "or":
+      let or_operands = [];
+      for (expression of expression.expressions) {
+        const expr = queryWhereOperator(expression, path);
+        if (expr == true) {
+          return expr;
+        }
+        if (expr !== null && expr !== false) {
+          or_operands.push(expr);
+        }
+      }
       return {
         operator: "Or",
-        operands: expression.expressions.reduce<WhereFilter[]>(
-          (exprs: WhereFilter[], expression: Expression): WhereFilter[] => {
-            const expr = queryWhereOperator(expression, path);
-            if (expr !== null) {
-              exprs.push(expr);
-            }
-            return exprs;
-          },
-          []
-        ),
+        operands: or_operands,
       };
     case "binary_op":
       switch (expression.operator) {
@@ -352,14 +372,20 @@ export function queryWhereOperator(
     case "binary_arr_op":
       switch (expression.operator) {
         case "in":
-          return {
-            operator: "Or",
-            operands: expression.values.map((value) => ({
-              operator: "Equal",
-              path: [...path, expression.column.name],
-              [expressionValueType(expression.value_type)]: value,
-            })),
-          };
+          let in_operands = expression.values.map((value) => ({
+            operator: "Equal",
+            path: [...path, expression.column.name],
+            [expressionValueType(expression.value_type)]: value,
+          }));
+          if (in_operands.length == 0) {
+            return false;
+          }
+          else {
+            return {
+              operator: "Or",
+              operands: in_operands,
+            };
+          }
         default:
           throw new Error(
             `Unsupported binary array comparison operator: ${expression.operator}`
