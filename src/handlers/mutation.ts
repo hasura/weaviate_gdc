@@ -64,9 +64,12 @@ export async function executeMutation(
         if (operation.where) {
           const where = queryWhereOperator(operation.where);
           if (where === false) {
-            return response;
+            response.operation_results.push({
+              affected_rows: 0,
+            });
+            break;
           }
-          if (where !== null && where !== true) {
+          if (where !== true) {
             deleter.withWhere(where);
           }
         }

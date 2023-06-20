@@ -12,8 +12,6 @@ import { Config } from "../config";
 import { WhereFilter } from "weaviate-ts-client";
 import { getWeaviateClient } from "../weaviate";
 import { builtInPropertiesKeys } from "./schema";
-import { e } from "mathjs";
-import exp from "constants";
 
 export async function executeQuery(
   query: QueryRequest,
@@ -56,7 +54,7 @@ export async function executeQuery(
       rows: results.map((query) => ({ query })),
     }));
   } else {
-    return executeSingleQuery(null, query.table[0], query.query, config);
+    return executeSingleQuery(true, query.table[0], query.query, config);
   }
 }
 
@@ -88,7 +86,7 @@ async function executeQueryById(
               return [
                 alias,
                 response.properties![
-                field.column as keyof typeof response.properties
+                  field.column as keyof typeof response.properties
                 ],
               ];
             }
@@ -102,7 +100,7 @@ async function executeQueryById(
               return [
                 alias,
                 response.properties![
-                field.field.column as keyof typeof response.properties
+                  field.field.column as keyof typeof response.properties
                 ],
               ];
             }
@@ -114,7 +112,7 @@ async function executeQueryById(
   };
 }
 
-type ResolvedWhereFilter = WhereFilter | null | true | false;
+type ResolvedWhereFilter = WhereFilter | true | false;
 
 async function executeSingleQuery(
   forEachWhere: ResolvedWhereFilter,
@@ -155,14 +153,14 @@ async function executeSingleQuery(
     return { rows: [] };
   }
 
-  if (forEachWhere !== null && forEachWhere !== true) {
+  if (forEachWhere !== true) {
     if (query.where) {
       const where = queryWhereOperator(query.where);
 
       if (where === false) {
         return { rows: [] };
       }
-      if (where !== null && where !== true) {
+      if (where !== true) {
         getter.withWhere({
           operator: "And",
           operands: [where, forEachWhere],
@@ -178,7 +176,7 @@ async function executeSingleQuery(
     if (where === false) {
       return { rows: [] };
     }
-    if (where !== null && where !== true) {
+    if (where !== true) {
       getter.withWhere(where);
     }
   }
@@ -203,7 +201,7 @@ async function executeSingleQuery(
         ) {
           const value =
             row[alias as keyof typeof row][
-            field.field.column as keyof typeof row
+              field.field.column as keyof typeof row
             ];
           return [alias, value];
         }
@@ -213,7 +211,7 @@ async function executeSingleQuery(
         ) {
           const value =
             row[alias as keyof typeof row][
-            field.relationship as keyof typeof row
+              field.relationship as keyof typeof row
             ];
           return [alias, value];
         }
@@ -274,9 +272,6 @@ export function queryWhereOperator(
   switch (expression.type) {
     case "not":
       const expr = queryWhereOperator(expression.expression, path);
-      if (expr === null) {
-        return null;
-      }
       if (expr === true) {
         return false;
       }
@@ -291,13 +286,18 @@ export function queryWhereOperator(
       let and_operands = [];
       for (expression of expression.expressions) {
         const expr = queryWhereOperator(expression, path);
+        // any expression that evaluates to false causes the entire expression to be false
         if (expr === false) {
           return false;
         }
-        if (expr !== null && expr !== true) {
+
+        // ignore expressions that evaluate to true
+        if (expr !== true) {
           and_operands.push(expr);
         }
       }
+      // if there are no operands, the expression evaluates to true
+      if (and_operands.length < 1) return true;
       return {
         operator: "And",
         operands: and_operands,
@@ -306,13 +306,17 @@ export function queryWhereOperator(
       let or_operands = [];
       for (expression of expression.expressions) {
         const expr = queryWhereOperator(expression, path);
+        // any expression evaluating to true causes the entire expression to be true
         if (expr == true) {
-          return expr;
+          return true;
         }
-        if (expr !== null && expr !== false) {
+        // ignore expressions that evaluate to false
+        if (expr !== false) {
           or_operands.push(expr);
         }
       }
+      // if there are no operands, the expression evaluates to false
+      if (or_operands.length < 1) return false;
       return {
         operator: "Or",
         operands: or_operands,
@@ -351,7 +355,7 @@ export function queryWhereOperator(
           };
         case "near_text":
           // silently ignore near_text operator
-          return null;
+          return true;
         default:
           throw new Error(
             `Unsupported binary comparison operator: ${expression.operator}`
@@ -372,20 +376,20 @@ export function queryWhereOperator(
     case "binary_arr_op":
       switch (expression.operator) {
         case "in":
-          let in_operands = expression.values.map((value) => ({
+          if (expression.values.length < 1) return false;
+          const columnName = expression.column.name;
+          const valueType = expression.value_type;
+
+          const in_operands: WhereFilter[] = expression.values.map((value) => ({
             operator: "Equal",
-            path: [...path, expression.column.name],
-            [expressionValueType(expression.value_type)]: value,
+            path: [...path, columnName],
+            [expressionValueType(valueType)]: value,
           }));
-          if (in_operands.length == 0) {
-            return false;
-          }
-          else {
-            return {
-              operator: "Or",
-              operands: in_operands,
-            };
-          }
+
+          return {
+            operator: "Or",
+            operands: in_operands,
+          };
         default:
           throw new Error(
             `Unsupported binary array comparison operator: ${expression.operator}`
