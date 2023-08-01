@@ -15,3 +15,7 @@ To use the weaviate connector with Hasura:
   - OpenAI API key: Yourn OpenAI API key for vectorization, pass any value if you don't use OpenAI.
 
 Please note that this is only a prototype and may contain bugs, reliability, and performance issues.
+
+## Deploy to Hasura Cloud
+
+You can use the new [Hasura Data Connector Plugin](https://hasura.io/docs/latest/hasura-cli/connector-plugin/) for the Hasura CLI to deploy this connector to Hasura Cloud.
