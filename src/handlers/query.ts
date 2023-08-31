@@ -1,4 +1,5 @@
 import {
+  ComparisonColumn,
   ComparisonValue,
   Expression,
   Field,
@@ -12,7 +13,14 @@ import { Config } from "../config";
 import { WhereFilter } from "weaviate-ts-client";
 import { getWeaviateClient } from "../weaviate";
 import { builtInPropertiesKeys } from "./schema";
-import { e } from "mathjs";
+
+function column_name(column: ComparisonColumn): string {
+  if (Array.isArray(column.name)) {
+    return column.name.join(".");
+  } else {
+    return column.name;
+  }
+}
 
 export async function executeQuery(
   query: QueryRequest,
@@ -305,31 +313,31 @@ export function queryWhereOperator(
         case "equal":
           return {
             operator: "Equal",
-            path: [...path, expression.column.name[0]],
+            path: [...path, column_name(expression.column)],
             ...expressionValue(expression.value),
           };
         case "less_than":
           return {
             operator: "LessThan",
-            path: [...path, expression.column.name[0]],
+            path: [...path, column_name(expression.column)],
             ...expressionValue(expression.value),
           };
         case "less_than_or_equal":
           return {
             operator: "LessThanEqual",
-            path: [...path, expression.column.name[0]],
+            path: [...path, column_name(expression.column)],
             ...expressionValue(expression.value),
           };
         case "greater_than":
           return {
             operator: "GreaterThan",
-            path: [...path, expression.column.name[0]],
+            path: [...path, column_name(expression.column)],
             ...expressionValue(expression.value),
           };
         case "greater_than_or_equal":
           return {
             operator: "GreaterThanEqual",
-            path: [...path, expression.column.name[0]],
+            path: [...path, column_name(expression.column)],
             ...expressionValue(expression.value),
           };
         case "near_text":
@@ -345,7 +353,7 @@ export function queryWhereOperator(
         case "is_null":
           return {
             operator: "IsNull",
-            path: [...path, expression.column.name[0]],
+            path: [...path, column_name(expression.column)],
           };
         default:
           throw new Error(
@@ -360,7 +368,7 @@ export function queryWhereOperator(
             operator: "Or",
             operands: expression.values.map((value) => ({
               operator: "Equal",
-              path: [...path, expression.column.name[0]],
+              path: [...path, column_name(expression.column)],
               [expressionValueType(expression.value_type)]: value,
             })),
           };
