@@ -1,7 +1,7 @@
 # Weaviate Data Connector
 
 > [!NOTE]
-> If using this connector with `graphql-engine` <= v2.32 use the [v2.23.0](https://github.com/hasura/weaviate_gdc/tree/v2.32.0) tag from this branch. If using this connector with `graphql-engine` >= v2.33 use main. There was a breaking change this is not backwards compatiple in the query request IR.
+> If using this connector with `graphql-engine` <= v2.32 use the [v2.32.0](https://github.com/hasura/weaviate_gdc/tree/v2.32.0) tag from this branch. If using this connector with `graphql-engine` >= v2.33 use main. There was a breaking change this is not backwards compatiple in the query request IR.
 
 This repository contains the source code for a prototype [data connector agent](https://github.com/hasura/graphql-engine/blob/master/dc-agents/README.md) for Weaviate to be able to use it with Hasura.
 
