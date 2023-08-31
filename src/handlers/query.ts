@@ -13,15 +13,16 @@ import { WhereFilter } from "weaviate-ts-client";
 import { getWeaviateClient } from "../weaviate";
 import { builtInPropertiesKeys } from "./schema";
 import { e } from "mathjs";
-import exp from "constants";
 
 export async function executeQuery(
   query: QueryRequest,
   config: Config
 ): Promise<QueryResponse> {
-  if (query.type !== "table") {
+  if (query.target.type !== "table") {
     throw new Error("Only table requests are supported");
   }
+
+  const queryTableName = query.target.name[0];
 
   // handle requests by primary key
   if (
@@ -32,7 +33,7 @@ export async function executeQuery(
   ) {
     return executeQueryById(
       query.query.where.value.value,
-      query.table[0],
+      queryTableName,
       query.query,
       config
     );
@@ -49,14 +50,14 @@ export async function executeQuery(
           ...expressionScalarValue(value),
         })),
       };
-      return executeSingleQuery(where, query.table[0], query.query, config);
+      return executeSingleQuery(where, queryTableName, query.query, config);
     });
 
     return Promise.all(queries).then((results) => ({
       rows: results.map((query) => ({ query })),
     }));
   } else {
-    return executeSingleQuery(null, query.table[0], query.query, config);
+    return executeSingleQuery(null, queryTableName, query.query, config);
   }
 }
 
@@ -304,31 +305,31 @@ export function queryWhereOperator(
         case "equal":
           return {
             operator: "Equal",
-            path: [...path, expression.column.name],
+            path: [...path, expression.column.name[0]],
             ...expressionValue(expression.value),
           };
         case "less_than":
           return {
             operator: "LessThan",
-            path: [...path, expression.column.name],
+            path: [...path, expression.column.name[0]],
             ...expressionValue(expression.value),
           };
         case "less_than_or_equal":
           return {
             operator: "LessThanEqual",
-            path: [...path, expression.column.name],
+            path: [...path, expression.column.name[0]],
             ...expressionValue(expression.value),
           };
         case "greater_than":
           return {
             operator: "GreaterThan",
-            path: [...path, expression.column.name],
+            path: [...path, expression.column.name[0]],
             ...expressionValue(expression.value),
           };
         case "greater_than_or_equal":
           return {
             operator: "GreaterThanEqual",
-            path: [...path, expression.column.name],
+            path: [...path, expression.column.name[0]],
             ...expressionValue(expression.value),
           };
         case "near_text":
@@ -344,7 +345,7 @@ export function queryWhereOperator(
         case "is_null":
           return {
             operator: "IsNull",
-            path: [...path, expression.column.name],
+            path: [...path, expression.column.name[0]],
           };
         default:
           throw new Error(
@@ -359,7 +360,7 @@ export function queryWhereOperator(
             operator: "Or",
             operands: expression.values.map((value) => ({
               operator: "Equal",
-              path: [...path, expression.column.name],
+              path: [...path, expression.column.name[0]],
               [expressionValueType(expression.value_type)]: value,
             })),
           };
