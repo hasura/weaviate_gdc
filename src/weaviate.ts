@@ -7,7 +7,7 @@ export function getWeaviateClient(config: Config) {
     host: config.host,
     apiKey: new ApiKey(config.apiKey),
     headers: {
-      "X-Openai-Api-Key": config.openApiKey,
+      "X-Openai-Api-Key": config.openAIKey,
     },
   });
 }
