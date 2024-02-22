@@ -5,7 +5,7 @@ export type Config = {
   scheme: string;
   host: string;
   apiKey: string;
-  openApiKey: string;
+  openAIKey: string;
 };
 
 export const getConfig = (request: FastifyRequest): Config => {
@@ -18,7 +18,7 @@ export const getConfig = (request: FastifyRequest): Config => {
     host: config.host,
     scheme: config.scheme ?? "http",
     apiKey: config.apiKey,
-    openApiKey: config.openApiKey,
+    openAIKey: config.openAIKey,
   };
 };
 
@@ -42,8 +42,8 @@ export const configSchema: ConfigSchemaResponse = {
         type: "string",
         nullable: false,
       },
-      openApiKey: {
-        description: "Open Api key",
+      openAIKey: {
+        description: "Open AI key",
         type: "string",
         nullable: false,
       },
